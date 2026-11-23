@@ -60,6 +60,12 @@ static char *slurp(const char *pathname) {
     return buf;
 }
 
+#define HALF_TICK 80.0f
+
+static struct {
+    GLfloat current_tick;
+} state;
+
 static void error_callback(int code, const char *msg) {
     die("(glfw code %d) %s", code, msg);
 }
@@ -68,9 +74,24 @@ static void framebuffer_size_callback(GLFWwindow *, int w, int h) {
     glViewport(0, 0, w, h);
 }
 
-static void key_callback(GLFWwindow *window, int key, int, int, int) {
-    if(key == GLFW_KEY_ESCAPE)
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
+static void key_callback(GLFWwindow *window, int key, int, int action, int) {
+    if(action == GLFW_RELEASE)
+        return;
+
+    switch(key) {
+        case GLFW_KEY_ESCAPE:
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+            break;
+        case GLFW_KEY_LEFT:
+            state.current_tick -= 1.0f;
+            break;
+        case GLFW_KEY_RIGHT:
+            state.current_tick += 1.0f;
+            break;
+        case GLFW_KEY_R:
+            state.current_tick = 0.0f;
+            break;
+    }
 }
 
 static GLuint make_shader(const char *pathname, GLuint shader_type) {
@@ -93,7 +114,7 @@ static GLuint make_shader(const char *pathname, GLuint shader_type) {
         char *log = xmalloc(length);
         glGetShaderInfoLog(shader, length, &length, log);
 
-        die("could not load gl shader:\n%s", log);
+        die("could not load gl shader %s:\n%s", pathname, log);
     }
 
     free((void *)sources[0]);
@@ -131,12 +152,12 @@ static void loop(GLFWwindow *window) {
     glDeleteShader(fshader);
 
     GLfloat vertices[][2] = {
-        { -1.0f, -1.0f },
-        {  1.0f, -1.0f },
-        {  1.0f,  1.0f },
-        {  1.0f,  1.0f },
-        { -1.0f,  1.0f },
-        { -1.0f, -1.0f },
+        { 0.0f, 0.0f },
+        { 1.0f, 0.0f },
+        { 1.0f, 1.0f },
+        { 1.0f, 1.0f },
+        { 0.0f, 1.0f },
+        { 0.0f, 0.0f },
     };
 
     GLuint vbo;
@@ -153,12 +174,16 @@ static void loop(GLFWwindow *window) {
 
     glUseProgram(program);
 
+    GLint uniform_tick = glGetUniformLocation(program, "tick");
+
     while(!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
 
         glBindVertexArray(vao);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        glUniform1f(uniform_tick, state.current_tick);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
