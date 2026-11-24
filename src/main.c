@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -239,10 +240,18 @@ static void configure_notes_vao(GLuint vao, GLuint notes_binding_index) {
     glVertexArrayAttribBinding(vao, TICK_END_LOCATION, notes_binding_index);
 }
 
-static void loop(GLFWwindow *window) {
-    GLuint program = make_program("rectangles");
+struct voice_gl {
+    GLuint  vao;
+    GLuint  vbos[2];
+    GLuint  program;
 
-    GLfloat vertices[][2] = {
+    GLuint  note_count;
+    GLuint  vertex_count;
+};
+
+static void make_rectangles_voice_gl(struct voice_gl *dst, struct note *notes,
+                                    size_t note_count) {
+    static const GLfloat vertices[][2] = {
         { 0.0f, 0.0f },
         { 1.0f, 0.0f },
         { 1.0f, 1.0f },
@@ -251,6 +260,49 @@ static void loop(GLFWwindow *window) {
         { 0.0f, 0.0f },
     };
 
+#   define VERTICES_BINDING_INDEX 0
+#   define NOTES_BINDING_INDEX    1
+
+    memset(dst, 0, sizeof *dst);
+
+    dst->program = make_program("rectangles");
+
+    glCreateBuffers(2, dst->vbos);
+
+    glNamedBufferData(dst->vbos[VERTICES_BINDING_INDEX],
+            sizeof vertices, vertices, GL_STATIC_DRAW);
+    glNamedBufferData(dst->vbos[NOTES_BINDING_INDEX],
+            sizeof notes[0] * note_count, notes, GL_STATIC_DRAW);
+
+    glCreateVertexArrays(1, &dst->vao);
+    glVertexArrayVertexBuffer(dst->vao, VERTICES_BINDING_INDEX,
+            dst->vbos[VERTICES_BINDING_INDEX], 0, sizeof vertices[0]);
+    glVertexArrayVertexBuffer(dst->vao, NOTES_BINDING_INDEX,
+            dst->vbos[NOTES_BINDING_INDEX], 0, sizeof notes[0]);
+
+    glEnableVertexArrayAttrib(dst->vao, CORNER_LOCATION);
+    glVertexArrayAttribFormat(dst->vao, CORNER_LOCATION, 2, GL_FLOAT,
+            GL_FALSE, 0);
+    glVertexArrayAttribBinding(dst->vao, CORNER_LOCATION,
+            VERTICES_BINDING_INDEX);
+
+    configure_notes_vao(dst->vao, NOTES_BINDING_INDEX);
+
+    dst->note_count = note_count;
+    dst->vertex_count = LEN(vertices);
+}
+
+static void render_voice_gl(struct voice_gl *voice, float tick) {
+    glUseProgram(voice->program);
+    glBindVertexArray(voice->vao);
+
+    glUniform1f(glGetUniformLocation(voice->program, "t"), tick);
+
+    glDrawArraysInstanced(GL_TRIANGLES, 0, voice->vertex_count,
+            voice->note_count);
+}
+
+static void loop(GLFWwindow *window) {
 #   define C   72.0f
 #   define Cis 73.0f
 #   define D   74.0f
@@ -264,43 +316,94 @@ static void loop(GLFWwindow *window) {
 #   define B   82.0f
 #   define H   83.0f
 
-    /* semibreve = 160.0 ticks */
-    struct note notes[] = {
-        { D,     0.0f,  80.0f },
-        { A,    80.0f, 160.0f },
-        { F,   160.0f, 240.0f },
-        { D,   240.0f, 320.0f },
-        { Cis, 320.0f, 400.0f },
-        { D,   400.0f, 440.0f },
-        { E,   440.0f, 480.0f },
-        { F,   480.0f, 560.0f },
+#   define x(s, d) (40 * s), (40 * s + 40 * d)
 
-        { C - (12.0f * 2), 560.0f, 600.0f },
-        { C + (12.0f * 2), 600.0f, 640.0f },
+    /* bass */
+    struct note tenor[] = {
+        { D, x(1, 1) },
+        { B - 12, x(2.5, 0.5) },
+
+        { Es, x(3, 1) },
+        { C, x(4, 1) },
+        { A - 12, x(5.5, 0.5) },
+
+        { D, x(6, 1) },
+        { B - 12, x(7, 1) },
+        { G - 12, x(8.5, 0.5) },
+
+        { C, x(9, 0.5) },
+        { C, x(9.5, 0.5) },
+        { C, x(10, 0.5) },
+        { C, x(10.5, 0.5) },
+        { C, x(11, 0.5) },
+        { C, x(11.5, 0.5) },
+        
+        { C, x(12, 0.5) },
+        { B - 12, x(12.5, 0.25) },
+        { A - 12, x(12.75, 0.25) },
+        { B - 12, x(13, 0.25) },
+        { G - 12, x(13.25, 0.25) },
+        { B - 12, x(13.50, 0.25) },
+        { C, x(13.75, 0.25) },
+        { D, x(14, 0.25) },
+        { Cis, x(14.25, 0.25) },
+        { D, x(14.50, 0.50) },
+
+        { D, x(15, 0.5) },
+        { G - 12, x(15.5, 0.5) },
+        { G - 12, x(16.25, 0.25) },
+        { A - 12, x(16.50, 0.25) },
+        { B - 12, x(16.75, 0.25) },
+        { C, x(17, 0.25) },
+        { B - 12, x(17.25, 0.25) },
+        { C, x(17.50, 0.50) },
+
+        { C, x(18, 0.5) },
+        { F - 12, x(18.5, 0.5) },
+        { F - 12, x(19.25, 0.25) },
+        { G - 12, x(19.50, 0.25) },
+        { A - 12, x(19.75, 0.25) },
+        { B - 12, x(20, 0.25) },
+        { A - 12, x(20.25, 0.25) },
+        { B - 12, x(20.50, 0.75) }, /* ~ */
+
+        { A - 12, x(21.25, 0.25) },
+        { B - 12, x(21.5, 0.25) },
+        { A - 12, x(21.75, 0.25) },
+        { G - 12, x(22, 0.25) },
+        { F - 12, x(22.25, 0.25) },
+        { G - 12, x(22.50, 0.25) },
+        { F - 12, x(22.75, 0.25) },
+        { E - 12, x(23, 0.25) },
+        { D - 12, x(23.25, 0.25) },
+        { E - 12, x(23.50, 0.25) },
+        { D - 12, x(23.75, 0.25) },
+    };
+    struct note alto[] = {
+        { G, x(13, 1) },
+        { F, x(14.5, 0.5) },
+
+        { B, x(15, 1) },
+        { G, x(16, 1) },
+        { E, x(17.5, 0.5) },
+
+        { A, x(18, 1) },
+        { F, x(19, 1) },
+        { D, x(20.5, 0.5) },
+
+        { G, x(21, 0.5) },
+        { G, x(21.5, 0.5) },
+        { G, x(22, 0.5) },
+        { G, x(22.5, 0.5) },
+        { G, x(23, 0.5) },
+        { G, x(23.5, 0.5) },
     };
 
-    GLuint quad_vbo, notes_vbo;
-    glCreateBuffers(1, &quad_vbo);
-    glNamedBufferData(quad_vbo, sizeof vertices, vertices, GL_STATIC_DRAW);
+    struct voice_gl tenor_gl;
+    struct voice_gl alto_gl;
 
-    glCreateBuffers(1, &notes_vbo);
-    glNamedBufferData(notes_vbo, sizeof notes, notes, GL_STATIC_DRAW);
-
-    GLuint vao;
-    glCreateVertexArrays(1, &vao);
-
-    glVertexArrayVertexBuffer(vao, 0, quad_vbo, 0, sizeof vertices[0]);
-    glVertexArrayVertexBuffer(vao, 1, notes_vbo, 0, sizeof notes[0]);
-
-    glEnableVertexArrayAttrib(vao, CORNER_LOCATION);
-    glVertexArrayAttribFormat(vao, CORNER_LOCATION, 2, GL_FLOAT, GL_FALSE, 0);
-    glVertexArrayAttribBinding(vao, CORNER_LOCATION, 0);
-
-    configure_notes_vao(vao, 1);
-
-    glUseProgram(program);
-
-    GLuint uniform_tick = glGetUniformLocation(program, "t");
+    make_rectangles_voice_gl(&tenor_gl, tenor, LEN(tenor));
+    make_rectangles_voice_gl(&alto_gl, alto, LEN(alto));
 
     while(!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
@@ -314,11 +417,8 @@ static void loop(GLFWwindow *window) {
             score.current_tick = (float)current_tick;
         }
 
-        glBindVertexArray(vao);
-
-        glUniform1f(uniform_tick, score.current_tick);
-
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, LEN(notes));
+        render_voice_gl(&tenor_gl, score.current_tick);
+        render_voice_gl(&alto_gl, score.current_tick);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
