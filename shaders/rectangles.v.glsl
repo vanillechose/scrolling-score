@@ -1,7 +1,6 @@
 #version 460 core
 
-layout (location = 0) in vec2 corner;
-
+in vec2 corner;
 in float note;
 in float tick_start;
 in float tick_end;

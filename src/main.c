@@ -166,6 +166,7 @@ static GLuint make_shader(const char *pathname, GLuint shader_type) {
     return shader;
 }
 
+#define CORNER_LOCATION       0
 #define NOTE_LOCATION         1
 #define TICK_START_LOCATION   2
 #define TICK_END_LOCATION     3
@@ -185,9 +186,10 @@ static GLuint make_program(const char *shader_name) {
     glAttachShader(program, vshader);
     glAttachShader(program, fshader);
 
-    glBindAttribLocation(program, NOTE_LOCATION,         "note");
-    glBindAttribLocation(program, TICK_START_LOCATION,   "tick_start");
-    glBindAttribLocation(program, TICK_END_LOCATION,     "tick_end");
+    glBindAttribLocation(program, CORNER_LOCATION,     "corner");
+    glBindAttribLocation(program, NOTE_LOCATION,       "note");
+    glBindAttribLocation(program, TICK_START_LOCATION, "tick_start");
+    glBindAttribLocation(program, TICK_END_LOCATION,   "tick_end");
 
     glLinkProgram(program);
 
@@ -210,6 +212,31 @@ static GLuint make_program(const char *shader_name) {
     glDeleteShader(fshader);
 
     return program;
+}
+
+struct note {
+    GLfloat note;
+    GLfloat start;
+    GLfloat end;
+};
+
+static void configure_notes_vao(GLuint vao, GLuint notes_binding_index) {
+    glVertexArrayBindingDivisor(vao, notes_binding_index, 1);
+
+    glEnableVertexArrayAttrib(vao, NOTE_LOCATION);
+    glVertexArrayAttribFormat(vao, NOTE_LOCATION, 1, GL_FLOAT, GL_FALSE,
+            offsetof(struct note, note));
+    glVertexArrayAttribBinding(vao, NOTE_LOCATION, notes_binding_index);
+
+    glEnableVertexArrayAttrib(vao, TICK_START_LOCATION);
+    glVertexArrayAttribFormat(vao, TICK_START_LOCATION, 1, GL_FLOAT, GL_FALSE,
+            offsetof(struct note, start));
+    glVertexArrayAttribBinding(vao, TICK_START_LOCATION, notes_binding_index);
+
+    glEnableVertexArrayAttrib(vao, TICK_END_LOCATION);
+    glVertexArrayAttribFormat(vao, TICK_END_LOCATION, 1, GL_FLOAT, GL_FALSE,
+            offsetof(struct note, end));
+    glVertexArrayAttribBinding(vao, TICK_END_LOCATION, notes_binding_index);
 }
 
 static void loop(GLFWwindow *window) {
@@ -236,12 +263,6 @@ static void loop(GLFWwindow *window) {
 #   define A   81.0f
 #   define B   82.0f
 #   define H   83.0f
-
-    struct note {
-        GLfloat note;
-        GLfloat start;
-        GLfloat end;
-    };
 
     /* semibreve = 160.0 ticks */
     struct note notes[] = {
@@ -270,26 +291,12 @@ static void loop(GLFWwindow *window) {
 
     glVertexArrayVertexBuffer(vao, 0, quad_vbo, 0, sizeof vertices[0]);
     glVertexArrayVertexBuffer(vao, 1, notes_vbo, 0, sizeof notes[0]);
-    glVertexArrayBindingDivisor(vao, 1, 1);
 
-    glEnableVertexArrayAttrib(vao, 0);
-    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, 0);
-    glVertexArrayAttribBinding(vao, 0, 0);
+    glEnableVertexArrayAttrib(vao, CORNER_LOCATION);
+    glVertexArrayAttribFormat(vao, CORNER_LOCATION, 2, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribBinding(vao, CORNER_LOCATION, 0);
 
-    glEnableVertexArrayAttrib(vao, NOTE_LOCATION);
-    glVertexArrayAttribFormat(vao, NOTE_LOCATION, 1, GL_FLOAT, GL_FALSE,
-            offsetof(struct note, note));
-    glVertexArrayAttribBinding(vao, NOTE_LOCATION, 1);
-
-    glEnableVertexArrayAttrib(vao, TICK_START_LOCATION);
-    glVertexArrayAttribFormat(vao, TICK_START_LOCATION, 1, GL_FLOAT, GL_FALSE,
-            offsetof(struct note, start));
-    glVertexArrayAttribBinding(vao, TICK_START_LOCATION, 1);
-
-    glEnableVertexArrayAttrib(vao, TICK_END_LOCATION);
-    glVertexArrayAttribFormat(vao, TICK_END_LOCATION, 1, GL_FLOAT, GL_FALSE,
-            offsetof(struct note, end));
-    glVertexArrayAttribBinding(vao, TICK_END_LOCATION, 1);
+    configure_notes_vao(vao, 1);
 
     glUseProgram(program);
 
