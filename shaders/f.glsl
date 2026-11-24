@@ -1,5 +1,8 @@
 #version 460 core
 
+in float tick_start_out;
+in float tick_end_out;
+
 uniform float tick;
 
 #define PLAYING_COLOR vec4(1.0, 1.0, 1.0, 1.0)
@@ -8,11 +11,7 @@ uniform float tick;
 out vec4 color;
 
 void main() {
-    /* hard coded quaver */
-#   define TICK_START 0.00
-#   define TICK_END   20.0
-
-    bool playing = tick > TICK_START && tick < TICK_END;
+    bool playing = tick > tick_start_out && tick <= tick_end_out;
 
     color = playing ? PLAYING_COLOR : IDLE_COLOR;
 }

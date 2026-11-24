@@ -10,6 +10,8 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#define LEN(a) (sizeof (a) / sizeof (a)[0])
+
 
 inline static void die(const char *fmt, ...) {
     fprintf(stderr, "fatal: ");
@@ -60,8 +62,6 @@ static char *slurp(const char *pathname) {
     return buf;
 }
 
-#define HALF_TICK 80.0f
-
 static struct {
     GLfloat current_tick;
 } state;
@@ -83,10 +83,10 @@ static void key_callback(GLFWwindow *window, int key, int, int action, int) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
             break;
         case GLFW_KEY_LEFT:
-            state.current_tick -= 1.0f;
+            state.current_tick -= 20.0f;
             break;
         case GLFW_KEY_RIGHT:
-            state.current_tick += 1.0f;
+            state.current_tick += 20.0f;
             break;
         case GLFW_KEY_R:
             state.current_tick = 0.0f;
@@ -160,17 +160,74 @@ static void loop(GLFWwindow *window) {
         { 0.0f, 0.0f },
     };
 
-    GLuint vbo;
-    glCreateBuffers(1, &vbo);
-    glNamedBufferData(vbo, sizeof vertices, vertices, GL_STATIC_DRAW);
+#   define C   72.0f
+#   define Cis 73.0f
+#   define D   74.0f
+#   define Es  75.0f
+#   define E   76.0f
+#   define F   77.0f
+#   define Fis 78.0f
+#   define G   79.0f
+#   define Gis 80.0f
+#   define A   81.0f
+#   define B   82.0f
+#   define H   83.0f
+
+    struct note {
+        GLfloat note;
+        GLfloat start;
+        GLfloat end;
+    };
+
+    /* semibreve = 160.0 ticks */
+    struct note notes[] = {
+        { D,     0.0f,  80.0f },
+        { A,    80.0f, 160.0f },
+        { F,   160.0f, 240.0f },
+        { D,   240.0f, 320.0f },
+        { Cis, 320.0f, 400.0f },
+        { D,   400.0f, 440.0f },
+        { E,   440.0f, 480.0f },
+        { F,   480.0f, 560.0f },
+
+        { C - (12.0f * 2), 560.0f, 600.0f },
+        { C + (12.0f * 2), 600.0f, 640.0f },
+    };
+
+    GLuint quad_vbo, notes_vbo;
+    glCreateBuffers(1, &quad_vbo);
+    glNamedBufferData(quad_vbo, sizeof vertices, vertices, GL_STATIC_DRAW);
+
+    glCreateBuffers(1, &notes_vbo);
+    glNamedBufferData(notes_vbo, sizeof notes, notes, GL_STATIC_DRAW);
 
     GLuint vao;
     glCreateVertexArrays(1, &vao);
 
-    glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof vertices[0]);
+    glVertexArrayVertexBuffer(vao, 0, quad_vbo, 0, sizeof vertices[0]);
+    glVertexArrayVertexBuffer(vao, 1, notes_vbo, 0, sizeof notes[0]);
+
     glEnableVertexArrayAttrib(vao, 0);
     glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, 0);
     glVertexArrayAttribBinding(vao, 0, 0);
+
+    glEnableVertexArrayAttrib(vao, 1);
+    glVertexArrayAttribFormat(vao, 1, 1, GL_FLOAT, GL_FALSE,
+            offsetof(struct note, note));
+    glVertexArrayAttribBinding(vao, 1, 1);
+    glVertexArrayBindingDivisor(vao, 1, 1);
+
+    glEnableVertexArrayAttrib(vao, 2);
+    glVertexArrayAttribFormat(vao, 2, 1, GL_FLOAT, GL_FALSE,
+            offsetof(struct note, start));
+    glVertexArrayAttribBinding(vao, 2, 1);
+    glVertexArrayBindingDivisor(vao, 2, 1);
+
+    glEnableVertexArrayAttrib(vao, 3);
+    glVertexArrayAttribFormat(vao, 3, 1, GL_FLOAT, GL_FALSE,
+            offsetof(struct note, end));
+    glVertexArrayAttribBinding(vao, 3, 1);
+    glVertexArrayBindingDivisor(vao, 3, 1);
 
     glUseProgram(program);
 
@@ -181,9 +238,9 @@ static void loop(GLFWwindow *window) {
 
         glBindVertexArray(vao);
 
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-
         glUniform1f(uniform_tick, state.current_tick);
+
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, LEN(notes));
 
         glfwSwapBuffers(window);
         glfwPollEvents();
