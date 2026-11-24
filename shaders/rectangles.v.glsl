@@ -1,11 +1,12 @@
 #version 460 core
 
 layout (location = 0) in vec2 corner;
-layout (location = 1) in float note;
-layout (location = 2) in float tick_start;
-layout (location = 3) in float tick_end;
 
-uniform float tick;
+in float note;
+in float tick_start;
+in float tick_end;
+
+uniform float t;
 
 /* 160 ticks = semibreve (arbitrary) */
 #define SEMIBREVE_TICKS 160.0
@@ -21,15 +22,15 @@ uniform float tick;
 #define NOTE_COUNT     (HIGH_NOTE - LOW_NOTE)
 #define NOTE_THICKNESS 0.08
 
-out float tick_start_out;
-out float tick_end_out;
+flat out float tick_start_out;
+flat out float tick_end_out;
 
 void main() {
-    float lo = (tick_start - tick) * TICK_WIDTH;
-    float hi = (tick_end   - tick) * TICK_WIDTH;
+    float lo = (tick_start - t) * TICK_WIDTH;
+    float hi = (tick_end   - t) * TICK_WIDTH;
     float xp = lo * (1.0 - corner.x) + hi * corner.x;
 
-    float y = corner.y * 0.10;
+    float y = corner.y * NOTE_THICKNESS;
 
     float offset_y = 2.0 * (note - LOW_NOTE) / NOTE_COUNT;
 

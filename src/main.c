@@ -32,6 +32,27 @@ static void *xmalloc(size_t n) {
     return malloc(n) ?: (die("out of memory"), NULL);
 }
 
+static char *concat(const char *s0, ...) {
+    size_t needed = 0;
+
+    va_list ap;
+
+    va_start(ap, s0);
+    for(const char *s = s0; s; s = va_arg(ap, const char *))
+        needed += strlen(s);
+    va_end(ap);
+
+    char *ret = xmalloc(needed + 1);
+    ret[0] = '\0';
+
+    va_start(ap, s0);
+    for(const char *s = s0; s; s = va_arg(ap, const char *))
+        strcat(ret, s);
+    va_end(ap);
+
+    return ret;
+}
+
 static char *slurp(const char *pathname) {
     FILE *stream = fopen(pathname, "r");
 
@@ -63,8 +84,25 @@ static char *slurp(const char *pathname) {
 }
 
 static struct {
+    enum {
+        SCORE_STOP,
+        SCORE_PLAYING,
+    } state;
+
     GLfloat current_tick;
-} state;
+} score;
+
+static void reset_score() {
+    score.state        = SCORE_STOP;
+    score.current_tick = 0.0f;
+}
+
+static void play_score() {
+    score.state        = SCORE_PLAYING;
+    score.current_tick = 0.0f;
+
+    glfwSetTime(0.0);
+}
 
 static void error_callback(int code, const char *msg) {
     die("(glfw code %d) %s", code, msg);
@@ -83,13 +121,19 @@ static void key_callback(GLFWwindow *window, int key, int, int action, int) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
             break;
         case GLFW_KEY_LEFT:
-            state.current_tick -= 20.0f;
+            if(score.state != SCORE_PLAYING)
+                score.current_tick -= 20.0f;
             break;
         case GLFW_KEY_RIGHT:
-            state.current_tick += 20.0f;
+            if(score.state != SCORE_PLAYING)
+                score.current_tick += 20.0f;
+            break;
+        case GLFW_KEY_P:
+            if(score.state != SCORE_PLAYING)
+                play_score();
             break;
         case GLFW_KEY_R:
-            state.current_tick = 0.0f;
+            reset_score();
             break;
     }
 }
@@ -122,14 +166,28 @@ static GLuint make_shader(const char *pathname, GLuint shader_type) {
     return shader;
 }
 
-static void loop(GLFWwindow *window) {
-    GLuint vshader = make_shader("shaders/v.glsl", GL_VERTEX_SHADER);
-    GLuint fshader = make_shader("shaders/f.glsl", GL_FRAGMENT_SHADER);
+#define NOTE_LOCATION         1
+#define TICK_START_LOCATION   2
+#define TICK_END_LOCATION     3
+
+static GLuint make_program(const char *shader_name) {
+    char *vshader_name = concat("shaders/", shader_name, ".v.glsl", NULL);
+    char *fshader_name = concat("shaders/", shader_name, ".f.glsl", NULL);
+
+    GLuint vshader = make_shader(vshader_name, GL_VERTEX_SHADER);
+    GLuint fshader = make_shader(fshader_name, GL_FRAGMENT_SHADER);
+
+    free(vshader_name);
+    free(fshader_name);
 
     GLuint program = glCreateProgram();
 
     glAttachShader(program, vshader);
     glAttachShader(program, fshader);
+
+    glBindAttribLocation(program, NOTE_LOCATION,         "note");
+    glBindAttribLocation(program, TICK_START_LOCATION,   "tick_start");
+    glBindAttribLocation(program, TICK_END_LOCATION,     "tick_end");
 
     glLinkProgram(program);
 
@@ -142,7 +200,7 @@ static void loop(GLFWwindow *window) {
         char *log = xmalloc(len);
         glGetProgramInfoLog(program, len, &len, log);
 
-        die("could not link program:\n%s", log);
+        die("could not link program %s:\n%s", shader_name, log);
     }
 
     glDetachShader(program, vshader);
@@ -150,6 +208,12 @@ static void loop(GLFWwindow *window) {
 
     glDeleteShader(vshader);
     glDeleteShader(fshader);
+
+    return program;
+}
+
+static void loop(GLFWwindow *window) {
+    GLuint program = make_program("rectangles");
 
     GLfloat vertices[][2] = {
         { 0.0f, 0.0f },
@@ -206,39 +270,46 @@ static void loop(GLFWwindow *window) {
 
     glVertexArrayVertexBuffer(vao, 0, quad_vbo, 0, sizeof vertices[0]);
     glVertexArrayVertexBuffer(vao, 1, notes_vbo, 0, sizeof notes[0]);
+    glVertexArrayBindingDivisor(vao, 1, 1);
 
     glEnableVertexArrayAttrib(vao, 0);
     glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, 0);
     glVertexArrayAttribBinding(vao, 0, 0);
 
-    glEnableVertexArrayAttrib(vao, 1);
-    glVertexArrayAttribFormat(vao, 1, 1, GL_FLOAT, GL_FALSE,
+    glEnableVertexArrayAttrib(vao, NOTE_LOCATION);
+    glVertexArrayAttribFormat(vao, NOTE_LOCATION, 1, GL_FLOAT, GL_FALSE,
             offsetof(struct note, note));
-    glVertexArrayAttribBinding(vao, 1, 1);
-    glVertexArrayBindingDivisor(vao, 1, 1);
+    glVertexArrayAttribBinding(vao, NOTE_LOCATION, 1);
 
-    glEnableVertexArrayAttrib(vao, 2);
-    glVertexArrayAttribFormat(vao, 2, 1, GL_FLOAT, GL_FALSE,
+    glEnableVertexArrayAttrib(vao, TICK_START_LOCATION);
+    glVertexArrayAttribFormat(vao, TICK_START_LOCATION, 1, GL_FLOAT, GL_FALSE,
             offsetof(struct note, start));
-    glVertexArrayAttribBinding(vao, 2, 1);
-    glVertexArrayBindingDivisor(vao, 2, 1);
+    glVertexArrayAttribBinding(vao, TICK_START_LOCATION, 1);
 
-    glEnableVertexArrayAttrib(vao, 3);
-    glVertexArrayAttribFormat(vao, 3, 1, GL_FLOAT, GL_FALSE,
+    glEnableVertexArrayAttrib(vao, TICK_END_LOCATION);
+    glVertexArrayAttribFormat(vao, TICK_END_LOCATION, 1, GL_FLOAT, GL_FALSE,
             offsetof(struct note, end));
-    glVertexArrayAttribBinding(vao, 3, 1);
-    glVertexArrayBindingDivisor(vao, 3, 1);
+    glVertexArrayAttribBinding(vao, TICK_END_LOCATION, 1);
 
     glUseProgram(program);
 
-    GLint uniform_tick = glGetUniformLocation(program, "tick");
+    GLuint uniform_tick = glGetUniformLocation(program, "t");
 
     while(!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
 
+#       define TPS (160.0 / 3.0) /* BPM 80.0 */
+
+        if(score.state == SCORE_PLAYING) {
+            double elapsed = glfwGetTime();
+            double current_tick = elapsed * TPS;
+
+            score.current_tick = (float)current_tick;
+        }
+
         glBindVertexArray(vao);
 
-        glUniform1f(uniform_tick, state.current_tick);
+        glUniform1f(uniform_tick, score.current_tick);
 
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, LEN(notes));
 
@@ -274,6 +345,8 @@ int main(int, char **) {
     glfwSetKeyCallback(window, key_callback);
 
     glfwSwapInterval(1);
+
+    reset_score();
 
     loop(window);
 
