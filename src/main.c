@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,77 +10,20 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#define LEN(a) (sizeof (a) / sizeof (a)[0])
+#include "common.h"
 
+/* TODO: provide a way to configure this value */
+#define TICK_PER_SEMIBREVE 160.0
 
-inline static void die(const char *fmt, ...) {
-    fprintf(stderr, "fatal: ");
+static struct note *load_voice_from_file(const char *pathname, size_t *count) {
+    char *text = slurp(pathname);
 
-    va_list ap;
-    va_start(ap, fmt);
+    struct note *ret;
+    *count = parse_voice(&ret, text, TICK_PER_SEMIBREVE);
 
-    vfprintf(stderr, fmt, ap);
-
-    va_end(ap);
-
-    fprintf(stderr, ".\n");
-
-    exit(1);
-}
-
-static void *xmalloc(size_t n) {
-    return malloc(n) ?: (die("out of memory"), NULL);
-}
-
-static char *concat(const char *s0, ...) {
-    size_t needed = 0;
-
-    va_list ap;
-
-    va_start(ap, s0);
-    for(const char *s = s0; s; s = va_arg(ap, const char *))
-        needed += strlen(s);
-    va_end(ap);
-
-    char *ret = xmalloc(needed + 1);
-    ret[0] = '\0';
-
-    va_start(ap, s0);
-    for(const char *s = s0; s; s = va_arg(ap, const char *))
-        strcat(ret, s);
-    va_end(ap);
+    free(text);
 
     return ret;
-}
-
-static char *slurp(const char *pathname) {
-    FILE *stream = fopen(pathname, "r");
-
-    if(!stream)
-        die("could not open %s: %s", pathname, strerror(errno));
-
-    struct stat st;
-    if(fstat(fileno(stream), &st) != 0)
-        die("could not read stats for %s: %s", pathname, strerror(errno));
-
-    size_t len = st.st_size;
-    char *buf = xmalloc(len + 1);
-
-    size_t nread = fread(buf, 1, len, stream);
-    if(nread != len) {
-        if(ferror(stream)) {
-            die("could not read file %s: %s", pathname, strerror(errno));
-        } else {
-            die("could not read file %s: expected %lu bytes, got %lu",
-                    pathname, len, nread);
-        }
-    }
-
-    buf[len] = '\0';
-
-    fclose(stream);
-
-    return buf;
 }
 
 static struct {
@@ -123,11 +65,11 @@ static void key_callback(GLFWwindow *window, int key, int, int action, int) {
             break;
         case GLFW_KEY_LEFT:
             if(score.state != SCORE_PLAYING)
-                score.current_tick -= 1.0f;
+                score.current_tick -= TICK_PER_SEMIBREVE / 16.0f;
             break;
         case GLFW_KEY_RIGHT:
             if(score.state != SCORE_PLAYING)
-                score.current_tick += 1.0f;
+                score.current_tick += TICK_PER_SEMIBREVE / 16.0f;
             break;
         case GLFW_KEY_P:
             if(score.state != SCORE_PLAYING)
@@ -215,12 +157,6 @@ static GLuint make_program(const char *shader_name) {
     return program;
 }
 
-struct note {
-    GLfloat note;
-    GLfloat start;
-    GLfloat end;
-};
-
 static void configure_notes_vao(GLuint vao, GLuint notes_binding_index) {
     glVertexArrayBindingDivisor(vao, notes_binding_index, 1);
 
@@ -300,6 +236,30 @@ static void render_voice_gl(struct voice_gl *voice, float tick) {
 
     glDrawArraysInstanced(GL_TRIANGLES, 0, voice->vertex_count,
             voice->note_count);
+}
+
+static struct voice_gl *voices;
+static size_t           voice_count;
+
+static void init(int argc, char **argv) {
+    argc -= 1;
+    argv += 1;
+
+    voice_count = argc;
+    voices      = xmalloc(voice_count * sizeof voices[0]);
+
+    for(size_t i = 0; i < voice_count; i += 1) {
+        size_t note_count;
+        struct note *notes = load_voice_from_file(argv[i], &note_count);
+
+        make_rectangles_voice_gl(&voices[i], notes, note_count);
+    }
+}
+
+static void render_voices() {
+    for(size_t i = 0; i < voice_count; i += 1) {
+        render_voice_gl(&voices[i], score.current_tick);
+    }
 }
 
 static void loop(GLFWwindow *window) {
@@ -419,15 +379,14 @@ static void loop(GLFWwindow *window) {
             score.current_tick = (float)current_tick;
         }
 
-        render_voice_gl(&tenor_gl, score.current_tick);
-        render_voice_gl(&alto_gl, score.current_tick);
+        render_voices();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 }
 
-int main(int, char **) {
+int main(int argc, char **argv) {
     if(!glfwInit())
         die("could not initialize openGL");
 
@@ -456,6 +415,8 @@ int main(int, char **) {
     glfwSwapInterval(1);
 
     reset_score();
+
+    init(argc, argv);
 
     loop(window);
 

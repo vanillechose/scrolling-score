@@ -23,6 +23,7 @@ uniform float t;
 
 flat out float tick_start_out;
 flat out float tick_end_out;
+flat out float note_out;
 
 flat out vec2  radius;
      out vec2  pos;
@@ -43,4 +44,5 @@ void main() {
 
     tick_start_out = tick_start;
     tick_end_out   = tick_end;
+    note_out       = note;
 }
