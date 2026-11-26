@@ -19,21 +19,27 @@ uniform float t;
 #define HIGH_NOTE 102.0
 
 #define NOTE_COUNT     (HIGH_NOTE - LOW_NOTE)
-#define NOTE_THICKNESS 0.08
+#define NOTE_THICKNESS (4.0 / NOTE_COUNT)
 
 flat out float tick_start_out;
 flat out float tick_end_out;
 
+flat out vec2  radius;
+     out vec2  pos;
+
 void main() {
-    float lo = (tick_start - t) * TICK_WIDTH;
-    float hi = (tick_end   - t) * TICK_WIDTH;
-    float xp = lo * (1.0 - corner.x) + hi * corner.x;
+    float x0 = (tick_start - t) * TICK_WIDTH;
+    float x1 = (tick_end   - t) * TICK_WIDTH;
 
-    float y = corner.y * NOTE_THICKNESS;
+    float y0 = 2.0 * (note - LOW_NOTE) / NOTE_COUNT - 1.0;
+    float y1 = y0 + NOTE_THICKNESS;
 
-    float offset_y = 2.0 * (note - LOW_NOTE) / NOTE_COUNT;
+    vec2 center = vec2(x0 + x1, y0 + y1) * 0.5;
 
-    gl_Position = vec4(xp, y + offset_y - 1.0, 0.0, 1.0);
+    radius  = vec2(x1 - x0, y1 - y0) * 0.5;
+    pos     = (2.0 * corner - 1.0) * radius;
+
+    gl_Position = vec4(center + pos, 0.0, 1.0);
 
     tick_start_out = tick_start;
     tick_end_out   = tick_end;

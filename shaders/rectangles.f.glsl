@@ -1,17 +1,18 @@
 #version 460 core
 
-in float tick_start_out;
-in float tick_end_out;
+flat in float tick_start_out;
+flat in float tick_end_out;
+
+flat in vec2  radius;
+     in vec2  pos;
 
 uniform float t;
-
-#define PLAYING_COLOR vec4(1.0, 1.0, 1.0, 1.0)
-#define IDLE_COLOR    vec4(1.0, 0.0, 0.0, 1.0)
 
 out vec4 color;
 
 void main() {
     bool playing = tick_start_out < t && t <= tick_end_out;
 
-    color = playing ? PLAYING_COLOR : IDLE_COLOR;
+    float c = playing ? 1.0 : 0.0;
+    color = vec4(1.0, c, c, 1.0);
 }

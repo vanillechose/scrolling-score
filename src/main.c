@@ -123,11 +123,11 @@ static void key_callback(GLFWwindow *window, int key, int, int action, int) {
             break;
         case GLFW_KEY_LEFT:
             if(score.state != SCORE_PLAYING)
-                score.current_tick -= 20.0f;
+                score.current_tick -= 1.0f;
             break;
         case GLFW_KEY_RIGHT:
             if(score.state != SCORE_PLAYING)
-                score.current_tick += 20.0f;
+                score.current_tick += 1.0f;
             break;
         case GLFW_KEY_P:
             if(score.state != SCORE_PLAYING)
@@ -303,6 +303,8 @@ static void render_voice_gl(struct voice_gl *voice, float tick) {
 }
 
 static void loop(GLFWwindow *window) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 #   define C   72.0f
 #   define Cis 73.0f
 #   define D   74.0f
@@ -438,7 +440,7 @@ int main(int, char **) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow *window =
-        glfwCreateWindow(1600, 900, "Scrolling Score", NULL, NULL);
+        glfwCreateWindow(1000, 1000, "Scrolling Score", NULL, NULL);
 
     if(!window)
         die("could not create window");
