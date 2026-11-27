@@ -55,6 +55,8 @@ static void framebuffer_size_callback(GLFWwindow *, int w, int h) {
     glViewport(0, 0, w, h);
 }
 
+static bool should_reload_shaders = false;
+
 static void key_callback(GLFWwindow *window, int key, int, int action, int) {
     if(action == GLFW_RELEASE)
         return;
@@ -76,6 +78,7 @@ static void key_callback(GLFWwindow *window, int key, int, int action, int) {
                 play_score();
             break;
         case GLFW_KEY_R:
+            should_reload_shaders = true;
             reset_score();
             break;
     }
@@ -185,6 +188,12 @@ struct voice_gl {
     GLuint  vertex_count;
 };
 
+static void reload_voice_shader(struct voice_gl *voice) {
+    glDeleteProgram(voice->program);
+
+    voice->program = make_program("rectangles");
+}
+
 static void make_rectangles_voice_gl(struct voice_gl *dst, struct note *notes,
                                     size_t note_count) {
     static const GLfloat vertices[][2] = {
@@ -265,109 +274,11 @@ static void render_voices() {
 static void loop(GLFWwindow *window) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-#   define C   72.0f
-#   define Cis 73.0f
-#   define D   74.0f
-#   define Es  75.0f
-#   define E   76.0f
-#   define F   77.0f
-#   define Fis 78.0f
-#   define G   79.0f
-#   define Gis 80.0f
-#   define A   81.0f
-#   define B   82.0f
-#   define H   83.0f
-
-#   define x(s, d) (40 * s), (40 * s + 40 * d)
-
-    /* bass */
-    struct note tenor[] = {
-        { D, x(1, 1) },
-        { B - 12, x(2.5, 0.5) },
-
-        { Es, x(3, 1) },
-        { C, x(4, 1) },
-        { A - 12, x(5.5, 0.5) },
-
-        { D, x(6, 1) },
-        { B - 12, x(7, 1) },
-        { G - 12, x(8.5, 0.5) },
-
-        { C, x(9, 0.5) },
-        { C, x(9.5, 0.5) },
-        { C, x(10, 0.5) },
-        { C, x(10.5, 0.5) },
-        { C, x(11, 0.5) },
-        { C, x(11.5, 0.5) },
-        
-        { C, x(12, 0.5) },
-        { B - 12, x(12.5, 0.25) },
-        { A - 12, x(12.75, 0.25) },
-        { B - 12, x(13, 0.25) },
-        { G - 12, x(13.25, 0.25) },
-        { B - 12, x(13.50, 0.25) },
-        { C, x(13.75, 0.25) },
-        { D, x(14, 0.25) },
-        { Cis, x(14.25, 0.25) },
-        { D, x(14.50, 0.50) },
-
-        { D, x(15, 0.5) },
-        { G - 12, x(15.5, 0.5) },
-        { G - 12, x(16.25, 0.25) },
-        { A - 12, x(16.50, 0.25) },
-        { B - 12, x(16.75, 0.25) },
-        { C, x(17, 0.25) },
-        { B - 12, x(17.25, 0.25) },
-        { C, x(17.50, 0.50) },
-
-        { C, x(18, 0.5) },
-        { F - 12, x(18.5, 0.5) },
-        { F - 12, x(19.25, 0.25) },
-        { G - 12, x(19.50, 0.25) },
-        { A - 12, x(19.75, 0.25) },
-        { B - 12, x(20, 0.25) },
-        { A - 12, x(20.25, 0.25) },
-        { B - 12, x(20.50, 0.75) }, /* ~ */
-
-        { A - 12, x(21.25, 0.25) },
-        { B - 12, x(21.5, 0.25) },
-        { A - 12, x(21.75, 0.25) },
-        { G - 12, x(22, 0.25) },
-        { F - 12, x(22.25, 0.25) },
-        { G - 12, x(22.50, 0.25) },
-        { F - 12, x(22.75, 0.25) },
-        { E - 12, x(23, 0.25) },
-        { D - 12, x(23.25, 0.25) },
-        { E - 12, x(23.50, 0.25) },
-        { D - 12, x(23.75, 0.25) },
-    };
-    struct note alto[] = {
-        { G, x(13, 1) },
-        { F, x(14.5, 0.5) },
-
-        { B, x(15, 1) },
-        { G, x(16, 1) },
-        { E, x(17.5, 0.5) },
-
-        { A, x(18, 1) },
-        { F, x(19, 1) },
-        { D, x(20.5, 0.5) },
-
-        { G, x(21, 0.5) },
-        { G, x(21.5, 0.5) },
-        { G, x(22, 0.5) },
-        { G, x(22.5, 0.5) },
-        { G, x(23, 0.5) },
-        { G, x(23.5, 0.5) },
-    };
-
-    struct voice_gl tenor_gl;
-    struct voice_gl alto_gl;
-
-    make_rectangles_voice_gl(&tenor_gl, tenor, LEN(tenor));
-    make_rectangles_voice_gl(&alto_gl, alto, LEN(alto));
 
     while(!glfwWindowShouldClose(window)) {
+        if(should_reload_shaders)
+            goto reload;
+
         glClear(GL_COLOR_BUFFER_BIT);
 
 #       define TPS (160.0 / 3.0) /* BPM 80.0 */
@@ -384,6 +295,16 @@ static void loop(GLFWwindow *window) {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+
+    return;
+reload:
+    for(size_t i = 0; i < voice_count; i += 1) {
+        reload_voice_shader(&voices[i]);
+    }
+
+    should_reload_shaders = false;
+
+    loop(window);
 }
 
 int main(int argc, char **argv) {
@@ -399,7 +320,7 @@ int main(int argc, char **argv) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow *window =
-        glfwCreateWindow(1000, 1000, "Scrolling Score", NULL, NULL);
+        glfwCreateWindow(400, 400, "Scrolling Score", NULL, NULL);
 
     if(!window)
         die("could not create window");
