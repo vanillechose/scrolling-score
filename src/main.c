@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <locale.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,7 +38,6 @@ static struct {
 
 static void reset_score() {
     score.state        = SCORE_STOP;
-    score.current_tick = 0.0f;
 }
 
 static void play_score() {
@@ -148,7 +148,9 @@ static GLuint make_program(const char *shader_name) {
         char *log = xmalloc(len);
         glGetProgramInfoLog(program, len, &len, log);
 
-        die("could not link program %s:\n%s", shader_name, log);
+        if(!should_reload_shaders)
+            die("could not link program %s:\n%s", shader_name, log);
+        return 0;
     }
 
     glDetachShader(program, vshader);
@@ -189,9 +191,13 @@ struct voice_gl {
 };
 
 static void reload_voice_shader(struct voice_gl *voice) {
-    glDeleteProgram(voice->program);
+    GLuint new_program = make_program("rectangles");
 
-    voice->program = make_program("rectangles");
+    if(new_program) {
+        glDeleteProgram(voice->program);
+
+        voice->program = new_program;
+    }
 }
 
 static void make_rectangles_voice_gl(struct voice_gl *dst, struct note *notes,
@@ -320,7 +326,7 @@ int main(int argc, char **argv) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow *window =
-        glfwCreateWindow(400, 400, "Scrolling Score", NULL, NULL);
+        glfwCreateWindow(800, 800, "Scrolling Score", NULL, NULL);
 
     if(!window)
         die("could not create window");
